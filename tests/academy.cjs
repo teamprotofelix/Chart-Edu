@@ -1,0 +1,27 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const vm=require('node:vm');
+const root=path.resolve(__dirname,'..');
+const ctx={window:{}};
+for(const f of ['js/lessons.js','js/academy-content.js','js/finance-formulas.js'])vm.runInNewContext(fs.readFileSync(path.join(root,f),'utf8'),ctx,{filename:f});
+const d=ctx.window.ATLAS_DATA,f=ctx.window.ATLAS_FINANCE;
+assert.equal(d.lessons.length,80,'80 lessons');
+assert.equal(d.patterns.length,12,'12 candle patterns');
+assert.equal(d.glossary.length,80,'80 terms');
+assert.equal(new Set(d.lessons.map(l=>l.id)).size,80,'lesson IDs unique');
+assert.equal(new Set(d.lessons.map(l=>l.title)).size,80,'lesson titles unique');
+for(const l of d.lessons){assert.ok(['초급','중급','고급'].includes(l.level));assert.ok(d.categories.includes(l.category));assert.equal(l.quiz.options.length,4);assert.ok(Number.isInteger(l.quiz.answer)&&l.quiz.answer>=0&&l.quiz.answer<4);assert.ok(l.quiz.explain.length>8);assert.ok(l.points.length>=3);}
+assert.deepEqual(JSON.parse(JSON.stringify(f.call(100,105,3,130))),{stock:30,covered:8});
+assert.deepEqual(JSON.parse(JSON.stringify(f.call(100,105,3,80))),{stock:-20,covered:-17});
+assert.deepEqual(JSON.parse(JSON.stringify(f.distribution(10000,200,100))),{before:1000000,afterNAV:9800,payout:20000,total:1000000});
+assert.deepEqual(JSON.parse(JSON.stringify(f.futures(350,345,10000,1,'long',10))),{notional:3500000,margin:350000,pnl:-50000});
+assert.equal(f.futures(350,345,10000,1,'short',10).pnl,50000);
+assert.ok(Math.abs(f.leverage(10,-100/11).index-100)<1e-9,'index round-trip');
+assert.ok(f.leverage(10,-100/11).double<100,'leverage decay after round trip');
+assert.ok(f.leverage(10,-100/11).inverse<100,'inverse decay after round trip');
+assert.equal(fs.readFileSync(path.join(root,'CNAME'),'utf8').trim(),'chart-edu.moip.ai.kr');
+const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+for(const src of ['js/lessons.js','js/academy-content.js','js/indicators.js','js/finance-formulas.js','js/app.js','js/academy.js','styles.css','academy.css'])assert.ok(html.includes(src),'missing '+src);
+for(const ext of fs.readdirSync(path.join(root,'assets')))assert.ok(ext.endsWith('.webp'));
+console.log('PASS: 80 lessons, 12 patterns, 80 terms, 4 financial formulas, CNAME and local assets');
