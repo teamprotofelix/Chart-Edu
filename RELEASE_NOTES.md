@@ -32,3 +32,10 @@
 - 정적 파일 참조/민감정보 패턴 검사
 
 실제 GitHub Pages에 배포한 후의 HTTPS·DNS·실기기 검증은 이번 ZIP 제작 검증에 포함되지 않습니다.
+
+
+## v2.1 — Visual learning upgrade
+- Upgraded core WebP hero and lab assets to higher-resolution, high-quality exports for large displays.
+- Added per-lesson visual aids in the lesson dialog: chart sketches, indicator diagrams, product structure diagrams, and pattern previews.
+- Added quick concept cards under each lesson visual to improve readability for beginners.
+- Improved mobile rendering for lesson visuals.
