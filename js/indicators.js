@@ -1,0 +1,27 @@
+/* Technical calculations are self-contained; no network or broker API. */
+(function(){
+'use strict';
+const valid=x=>typeof x==='number'&&Number.isFinite(x);
+function sma(v,n){const r=Array(v.length).fill(null);let sum=0,invalid=0;for(let i=0;i<v.length;i++){if(valid(v[i]))sum+=v[i];else invalid++;if(i>=n){if(valid(v[i-n]))sum-=v[i-n];else invalid--;}if(i>=n-1&&invalid===0)r[i]=sum/n;}return r;}
+function ema(v,n){const r=Array(v.length).fill(null);let streak=0,sum=0,prev=null,alpha=2/(n+1);for(let i=0;i<v.length;i++){const x=v[i];if(!valid(x)){streak=0;sum=0;prev=null;continue;}if(prev!==null){prev=alpha*x+(1-alpha)*prev;r[i]=prev;continue;}sum+=x;streak++;if(streak===n){prev=sum/n;r[i]=prev;}}return r;}
+function bollinger(closes,n=20,k=2){const mid=sma(closes,n),top=Array(closes.length).fill(null),bottom=Array(closes.length).fill(null);for(let i=n-1;i<closes.length;i++){if(!valid(mid[i]))continue;let sum=0;for(let j=i-n+1;j<=i;j++)sum+=(closes[j]-mid[i])**2;const stdev=Math.sqrt(sum/n);top[i]=mid[i]+k*stdev;bottom[i]=mid[i]-k*stdev;}return{mid,top,bottom};}
+function rsi(closes,n=14){let gs=0,ls=0;const out=Array(closes.length).fill(null);if(closes.length<=n)return out;for(let i=1;i<=n;i++){const d=closes[i]-closes[i-1];gs+=Math.max(d,0);ls+=Math.max(-d,0);}let ag=gs/n,al=ls/n;const value=()=>al===0?(ag===0?50:100):100-100/(1+ag/al);out[n]=value();for(let i=n+1;i<closes.length;i++){const d=closes[i]-closes[i-1];ag=(ag*(n-1)+Math.max(d,0))/n;al=(al*(n-1)+Math.max(-d,0))/n;out[i]=value();}return out;}
+function macd(closes){const fast=ema(closes,12),slow=ema(closes,26),line=fast.map((v,i)=>valid(v)&&valid(slow[i])?v-slow[i]:null),signal=ema(line,9),hist=line.map((v,i)=>valid(v)&&valid(signal[i])?v-signal[i]:null);return{line,signal,hist};}
+function stoch(bars,n=5,smooth=3,d=3){const fast=Array(bars.length).fill(null);for(let i=n-1;i<bars.length;i++){const seg=bars.slice(i-n+1,i+1),hi=Math.max(...seg.map(b=>b.h)),lo=Math.min(...seg.map(b=>b.l));fast[i]=hi===lo?50:100*(bars[i].c-lo)/(hi-lo);}const k=sma(fast,smooth);return{fast,k,d:sma(k,d)};}
+function atrAndAdx(bars,n=14){const len=bars.length,tr=Array(len).fill(null),atr=Array(len).fill(null),plus=Array(len).fill(null),minus=Array(len).fill(null),adx=Array(len).fill(null),dx=Array(len).fill(null),pct=Array(len).fill(null);let smTR=0,smP=0,smM=0,avgDX=0;for(let i=1;i<len;i++){let b=bars[i],p=bars[i-1],up=b.h-p.h,dn=p.l-b.l;tr[i]=Math.max(b.h-b.l,Math.abs(b.h-p.c),Math.abs(b.l-p.c));const pd=up>dn&&up>0?up:0,md=dn>up&&dn>0?dn:0;if(i<=n){smTR+=tr[i];smP+=pd;smM+=md;}else{smTR=smTR-smTR/n+tr[i];smP=smP-smP/n+pd;smM=smM-smM/n+md;}if(i>=n){atr[i]=smTR/n;pct[i]=100*atr[i]/b.c;plus[i]=smTR?100*smP/smTR:0;minus[i]=smTR?100*smM/smTR:0;dx[i]=plus[i]+minus[i]?100*Math.abs(plus[i]-minus[i])/(plus[i]+minus[i]):0;if(i<2*n)avgDX+=dx[i];if(i===2*n-1)adx[i]=avgDX/n;else if(i>2*n-1)adx[i]=(adx[i-1]*(n-1)+dx[i])/n;}}
+return{tr,atr,pct,adx,plus,minus,dx};}
+function obv(bars){const result=Array(bars.length).fill(null);let val=0;for(let i=0;i<bars.length;i++){if(i>0){if(bars[i].c>bars[i-1].c)val+=bars[i].v;else if(bars[i].c<bars[i-1].c)val-=bars[i].v;}result[i]=val;}return result;}
+function cmf(bars,n=20){const mf=bars.map(b=>b.h===b.l?0:((2*b.c-b.h-b.l)/(b.h-b.l))*b.v),vol=bars.map(b=>b.v),v1=sma(mf,n),v2=sma(vol,n);return v1.map((v,i)=>valid(v)&&valid(v2[i])&&v2[i]!==0?v/v2[i]:null);}
+function vwap(bars){let cumulPV=0,cumulVol=0,lastDay;return bars.map(b=>{if(b.day!==lastDay){cumulPV=0;cumulVol=0;lastDay=b.day;}cumulPV+=((b.h+b.l+b.c)/3)*b.v;cumulVol+=b.v;return cumulVol?cumulPV/cumulVol:null;});}
+function seeded(seed){let x=seed|0;return()=>{x^=x<<13;x^=x>>>17;x^=x<<5;return(x>>>0)/4294967296;};}
+function generate(scenario){const ids={rise:11421,fall:56129,range:87263,reversal:92003};const rnd=seeded(ids[scenario]||ids.rise),bars=[];let prev=102;for(let i=0;i<780;i++){const day=Math.floor(i/390),minute=i%390;let drift=0;let wave=0;switch(scenario){case'rise':drift=.037;wave=Math.sin(i/31)*.038;break;case'fall':drift=-.036;wave=Math.sin(i/25)*.042;break;case'range':drift=-Math.sin(i/19)*.05;wave=Math.cos(i/37)*.06;break;case'reversal':drift=i<400?.034:-.055;wave=Math.sin(i/22)*.049;break;default:drift=0;}
+const open=minute===0&&day>0?prev+(.8+rnd()*.5)*(scenario==='fall'?-1:1):prev;
+const noise=(rnd()+rnd()+rnd()-1.5)*.49;
+const close=Math.max(15,open+drift+wave+noise);
+const ext1=.035+rnd()*.17,ext2=.035+rnd()*.17;
+const high=Math.max(open,close)+ext1,low=Math.max(.01,Math.min(open,close)-ext2);
+const v=Math.round(800+rnd()*1300+Math.abs(close-open)*6200+(minute<18||minute>365?1500:0)+(i%71<4?2400:0));bars.push({o:open,h:high,l:low,c:close,v,day,minute});prev=close;}return bars;}
+function aggregate(base,tf){const result=[];let chunk=[];let currentDay=-1;for(let i=0;i<base.length;i++){const b=base[i];if(currentDay!==b.day){chunk=[];currentDay=b.day;}chunk.push(b);if(chunk.length===tf){result.push({o:chunk[0].o,h:Math.max(...chunk.map(x=>x.h)),l:Math.min(...chunk.map(x=>x.l)),c:chunk.at(-1).c,v:chunk.reduce((a,x)=>a+x.v,0),day:b.day,minute:b.minute-tf+1,tf});chunk=[];}}return result;}
+function calc(bars){const closes=bars.map(b=>b.c),bb=bollinger(closes),dm=atrAndAdx(bars);return{closes,sma5:sma(closes,5),sma20:sma(closes,20),sma60:sma(closes,60),ema12:ema(closes,12),ema26:ema(closes,26),bb,macd:macd(closes),rsi:rsi(closes),stoch:stoch(bars),dm,cmf:cmf(bars),obv:obv(bars),vwap:vwap(bars)};}
+window.ATLAS_MATH={valid,sma,ema,bollinger,rsi,macd,stoch,atrAndAdx,obv,cmf,vwap,generate,aggregate,calc};
+})();
